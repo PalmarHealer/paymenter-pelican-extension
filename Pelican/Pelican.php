@@ -209,30 +209,6 @@ class Pelican extends Server
             ],
         ];
     }
-    public function getCheckoutConfig(Product $product)
-    {
-        return [
-            [
-                'name' => 'location',
-                'label' => 'Location',
-                'type' => 'select',
-                'required' => true,
-                'options' => [
-                    '1' => 'Location 1',
-                    '2' => 'Location 2',
-                ],
-                'live' => true,
-            ],
-            [
-                'name' => 'memory',
-                'label' => 'Memory',
-                'type' => 'select',
-                'options' => [
-                    '1' => "hello world",
-                ]
-            ]
-        ];
-    }
 
     public function createServer(Service $service, $settings, $properties)
     {
