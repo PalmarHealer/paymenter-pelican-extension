@@ -561,7 +561,7 @@ class Pelican extends Server
             [
                 'type' => 'button',
                 'label' => 'Go to server',
-                'url' => $this->config('host') . '/server/' . $server['attributes']['id'],
+                'url' => $this->config('host') . '/server/' . $server['attributes']['identifier'],
             ],
         ];
     }
