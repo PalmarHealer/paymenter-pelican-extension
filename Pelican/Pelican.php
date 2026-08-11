@@ -275,7 +275,7 @@ class Pelican extends Server
         ];
         if ($deploymentData['auto_deploy']) {
             $serverCreationData['deploy'] = [
-                'locations' => [$settings['node']] ?? [],
+                'locations' => $settings['node'] ? [$settings['node']] : [],
                 'dedicated_ip' => $settings['dedicated_ip'] ?? false,
                 'port_range' => $settings['port_range'] ?? [],
                 'tags' => ['PaymenterDeployment'],
@@ -317,6 +317,7 @@ class Pelican extends Server
         }
 
         $nodes = $this->request('/api/application/nodes/deployable', 'get', [
+            'include' => 'allocations',
             'memory' => $settings['memory'],
             'disk' => $settings['disk'],
         ]);
