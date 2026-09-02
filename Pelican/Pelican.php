@@ -74,9 +74,15 @@ class Pelican extends Server
         }
 
         $eggList = [];
+        $imageList = ['' => 'Use egg default'];
         $eggs = $this->request('/api/application/eggs');
         foreach ($eggs['data'] as $egg) {
             $eggList[$egg['attributes']['id']] = $egg['attributes']['name'];
+            if (!empty($values['egg_id']) && $egg['attributes']['id'] == $values['egg_id']) {
+                foreach ($egg['attributes']['docker_images'] ?? [] as $label => $image) {
+                    $imageList[$image] = $label;
+                }
+            }
         }
 
         $using_port_array = isset($values['port_array']) && $values['port_array'] !== '';
@@ -95,6 +101,14 @@ class Pelican extends Server
                 'type' => 'select',
                 'options' => $eggList,
                 'required' => true,
+                'live' => true,
+            ],
+            [
+                'name' => 'docker_image',
+                'label' => 'Docker Image',
+                'type' => 'select',
+                'description' => 'Fill in to override the egg default image',
+                'options' => $imageList,
             ],
             [
                 'name' => 'memory',
@@ -250,7 +264,7 @@ class Pelican extends Server
             'name' => isset($settings['servername']) ? $settings['servername'] : $service->product->name . ' #' . $service->id,
             'user' => (int) $user,
             'egg' => $settings['egg_id'],
-            'docker_image' => $settings['docker_image'] ?? $eggData['attributes']['docker_image'],
+            'docker_image' => $this->resolveDockerImage($settings, $eggData) ?? $eggData['attributes']['docker_image'],
             'startup' => $eggData['attributes']['startup'],
             'environment' => $deploymentData['environment'],
             'skip_scripts' => $settings['skip_scripts'] ?? false,
@@ -455,6 +469,21 @@ class Pelican extends Server
         ];
     }
 
+    private function resolveDockerImage(array $settings, array $eggData): ?string
+    {
+        $dockerImage = $settings['docker_image'] ?? null;
+        if (!is_string($dockerImage) || $dockerImage === '') {
+            return null;
+        }
+
+        $allowedImages = array_values($eggData['attributes']['docker_images'] ?? []);
+        if ($allowedImages && !in_array($dockerImage, $allowedImages, true)) {
+            return null;
+        }
+
+        return $dockerImage;
+    }
+
     private function getServer($id, $failIfNotFound = true, $raw = false)
     {
         try {
@@ -545,7 +574,7 @@ class Pelican extends Server
             'skip_scripts' => $settings['skip_scripts'] ?? false,
             'oom_disabled' => !($settings['oom_killer'] ?? false),
             'egg' => $settings['egg_id'],
-            'image' => $server['attributes']['container']['image'] ?? $eggData['attributes']['docker_image'],
+            'image' => $this->resolveDockerImage($settings, $eggData) ?? $server['attributes']['container']['image'] ?? $eggData['attributes']['docker_image'],
             'startup' => $server['attributes']['container']['startup_command'] ?? $settings['startup'] ?? $eggData['attributes']['startup'],
         ];
 
