@@ -476,7 +476,6 @@ class Pelican extends Server
             return null;
         }
 
-        // Fail closed: a missing or empty allowlist must not accept an arbitrary image.
         $images = $eggData['attributes']['docker_images'] ?? [];
         $allowedImages = is_array($images) ? array_values($images) : [];
         if (!in_array($dockerImage, $allowedImages, true)) {
