@@ -107,7 +107,7 @@ class Pelican extends Server
                 'name' => 'docker_image',
                 'label' => 'Docker Image',
                 'type' => 'select',
-                'description' => 'Fill in to override the egg default image',
+                'description' => 'Leave on egg default to use the egg\'s image',
                 'options' => $imageList,
             ],
             [
@@ -476,8 +476,10 @@ class Pelican extends Server
             return null;
         }
 
-        $allowedImages = array_values($eggData['attributes']['docker_images'] ?? []);
-        if ($allowedImages && !in_array($dockerImage, $allowedImages, true)) {
+        // Fail closed: a missing or empty allowlist must not accept an arbitrary image.
+        $images = $eggData['attributes']['docker_images'] ?? [];
+        $allowedImages = is_array($images) ? array_values($images) : [];
+        if (!in_array($dockerImage, $allowedImages, true)) {
             return null;
         }
 
