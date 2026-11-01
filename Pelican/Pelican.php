@@ -74,13 +74,15 @@ class Pelican extends Server
         }
 
         $eggList = [];
-        $imageList = ['' => 'Use egg default'];
+        $imageList = [];
         $eggs = $this->request('/api/application/eggs');
         foreach ($eggs['data'] as $egg) {
             $eggList[$egg['attributes']['id']] = $egg['attributes']['name'];
             if (!empty($values['egg_id']) && $egg['attributes']['id'] == $values['egg_id']) {
                 foreach ($egg['attributes']['docker_images'] ?? [] as $label => $image) {
-                    $imageList[$image] = $label;
+                    // A list-shaped map has no labels, and two labels can share one image
+                    $label = is_int($label) ? $image : $label;
+                    $imageList[$image] = isset($imageList[$image]) ? $imageList[$image] . ' / ' . $label : $label;
                 }
             }
         }
@@ -107,7 +109,7 @@ class Pelican extends Server
                 'name' => 'docker_image',
                 'label' => 'Docker Image',
                 'type' => 'select',
-                'description' => 'Leave on egg default to use the egg\'s image',
+                'description' => 'Leave empty to use the egg\'s default image',
                 'options' => $imageList,
             ],
             [
@@ -264,7 +266,7 @@ class Pelican extends Server
             'name' => isset($settings['servername']) ? $settings['servername'] : $service->product->name . ' #' . $service->id,
             'user' => (int) $user,
             'egg' => $settings['egg_id'],
-            'docker_image' => $this->resolveDockerImage($settings, $eggData) ?? $eggData['attributes']['docker_image'],
+            'docker_image' => $this->resolveDockerImage($settings, $eggData),
             'startup' => $eggData['attributes']['startup'],
             'environment' => $deploymentData['environment'],
             'skip_scripts' => $settings['skip_scripts'] ?? false,
@@ -469,20 +471,31 @@ class Pelican extends Server
         ];
     }
 
-    private function resolveDockerImage(array $settings, array $eggData): ?string
+    private function resolveDockerImage(array $settings, array $eggData, ?array $server = null): string
     {
-        $dockerImage = $settings['docker_image'] ?? null;
-        if (!is_string($dockerImage) || $dockerImage === '') {
-            return null;
-        }
-
         $images = $eggData['attributes']['docker_images'] ?? [];
         $allowedImages = is_array($images) ? array_values($images) : [];
-        if (!in_array($dockerImage, $allowedImages, true)) {
-            return null;
+
+        $currentImage = $server['attributes']['container']['image'] ?? null;
+        $currentAllowed = in_array($currentImage, $allowedImages, true);
+        $sameEgg = $server !== null && (int) ($server['attributes']['egg'] ?? 0) === (int) $eggData['attributes']['id'];
+
+        // An upgrade on the same egg keeps the image the server already runs
+        if ($sameEgg && $currentAllowed) {
+            return $currentImage;
         }
 
-        return $dockerImage;
+        $dockerImage = $settings['docker_image'] ?? null;
+        if (in_array($dockerImage, $allowedImages, true)) {
+            return $dockerImage;
+        }
+
+        // Otherwise it keeps its image unless the new egg does not allow it
+        if (is_string($currentImage) && $currentImage !== '' && ($sameEgg || $currentAllowed)) {
+            return $currentImage;
+        }
+
+        return $eggData['attributes']['docker_image'];
     }
 
     private function getServer($id, $failIfNotFound = true, $raw = false)
@@ -575,7 +588,7 @@ class Pelican extends Server
             'skip_scripts' => $settings['skip_scripts'] ?? false,
             'oom_disabled' => !($settings['oom_killer'] ?? false),
             'egg' => $settings['egg_id'],
-            'image' => $this->resolveDockerImage($settings, $eggData) ?? $server['attributes']['container']['image'] ?? $eggData['attributes']['docker_image'],
+            'image' => $this->resolveDockerImage($settings, $eggData, $server),
             'startup' => $server['attributes']['container']['startup_command'] ?? $settings['startup'] ?? $eggData['attributes']['startup'],
         ];
 
