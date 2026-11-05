@@ -231,6 +231,8 @@ class Pelican extends Server
         if ($this->getServer($service->id, failIfNotFound: false)) {
             throw new \Exception('Server already exists');
         }
+        // Kept apart so an unusable checkout value falls back to the product's image
+        $imageCandidates = [$properties['docker_image'] ?? null, $settings['docker_image'] ?? null];
         // Smash the properties into the settings
         $settings = array_merge($settings, $properties);
 
@@ -266,7 +268,7 @@ class Pelican extends Server
             'name' => isset($settings['servername']) ? $settings['servername'] : $service->product->name . ' #' . $service->id,
             'user' => (int) $user,
             'egg' => $settings['egg_id'],
-            'docker_image' => $this->resolveDockerImage($settings, $eggData),
+            'docker_image' => $this->resolveDockerImage($imageCandidates, $eggData),
             'startup' => $eggData['attributes']['startup'],
             'environment' => $deploymentData['environment'],
             'skip_scripts' => $settings['skip_scripts'] ?? false,
@@ -471,7 +473,7 @@ class Pelican extends Server
         ];
     }
 
-    private function resolveDockerImage(array $settings, array $eggData, ?array $server = null): string
+    private function resolveDockerImage(array $candidates, array $eggData, ?array $server = null): string
     {
         $images = $eggData['attributes']['docker_images'] ?? [];
         $allowedImages = is_array($images) ? array_values($images) : [];
@@ -485,9 +487,11 @@ class Pelican extends Server
             return $currentImage;
         }
 
-        $dockerImage = $settings['docker_image'] ?? null;
-        if (in_array($dockerImage, $allowedImages, true)) {
-            return $dockerImage;
+        // The checkout value first, then the product's own image
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, $allowedImages, true)) {
+                return $candidate;
+            }
         }
 
         // Otherwise it keeps its image unless the new egg does not allow it
@@ -547,6 +551,7 @@ class Pelican extends Server
     {
         $server = $this->getServer($service->id, raw: true);
 
+        $imageCandidates = [$properties['docker_image'] ?? null, $settings['docker_image'] ?? null];
         $settings = array_merge($settings, $properties);
 
         $updateServerData = [
@@ -588,7 +593,7 @@ class Pelican extends Server
             'skip_scripts' => $settings['skip_scripts'] ?? false,
             'oom_disabled' => !($settings['oom_killer'] ?? false),
             'egg' => $settings['egg_id'],
-            'image' => $this->resolveDockerImage($settings, $eggData, $server),
+            'image' => $this->resolveDockerImage($imageCandidates, $eggData, $server),
             'startup' => $server['attributes']['container']['startup_command'] ?? $settings['startup'] ?? $eggData['attributes']['startup'],
         ];
 
